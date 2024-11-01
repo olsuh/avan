@@ -5,6 +5,9 @@ edition = "2021"
 
 [dependencies]
 
+reqwest = { version = "0.12", features = ["blocking", "cookies", "http2"]}
+
+
 http-body-util = "0.1"
 hyper-util = { version = "0.1", default-features = false, features = ["server-auto"] }
 rustls = { version = "0.23", default-features = false, features = ["tls12", "ring"] }

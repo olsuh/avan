@@ -1,123 +1,15 @@
-// Simple HTTPS GET client based on hyper-rustls
-//
-// First parameter is the mandatory URL to GET.
-// Second parameter is an optional path to CA store.
-use http::Uri;
-use http_body_util::{BodyExt, Empty};
-use hyper::body::Bytes;
-use hyper_rustls::ConfigBuilderExt;
-use hyper_util::{client::legacy::Client, rt::TokioExecutor};
-use rustls::RootCertStore;
-
-use std::str::FromStr;
-use std::{fs, io};
-
-fn main() {
-    // Send GET request and inspect result, with proper error handling.
-    if let Err(e) = run_client_http2() {
-        eprintln!("FAILED: {}", e);
-        std::process::exit(1);
-    }
-}
-
-fn error(err: String) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
-}
+pub mod client_http2;
+pub mod avan_mod;
 
 #[tokio::main]
-async fn run_client_http2() -> io::Result<()> {
-    // Set a process wide default crypto provider.
-    //#[cfg(feature = "ring")]
-    let _ = rustls::crypto::ring::default_provider().install_default();
-    //#[cfg(feature = "aws-lc-rs")]
-    //let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    // First parameter is target URL (mandatory).
-    //let url = env::args().nth(1);
-    let url = "https://avan.market/v1/api/users/catalog?app_id=252490&currency=2&page=30";
-    let url = Some(url);
-    let url = match url {
-        Some(ref url) => Uri::from_str(url).map_err(|e| error(format!("{}", e)))?,
-        None => {
-            println!("Usage: client <url> <ca_store>");
-            return Ok(());
-        }
-    };
-
-    // Second parameter is custom Root-CA store (optional, defaults to native cert store).
-    let ca: Option<&str> = None; //env::args().nth(2);
-    let mut ca = match ca {
-        Some(ref path) => {
-            let f = fs::File::open(path)
-                .map_err(|e| error(format!("failed to open {}: {}", path, e)))?;
-            let rd = io::BufReader::new(f);
-            Some(rd)
-        }
-        None => None,
-    };
-
-    // Prepare the TLS client config
-    let tls = match ca {
-        Some(ref mut rd) => {
-            // Read trust roots
-            let certs = rustls_pemfile::certs(rd).collect::<Result<Vec<_>, _>>()?;
-            let mut roots = RootCertStore::empty();
-            roots.add_parsable_certificates(certs);
-            // TLS client config using the custom CA store for lookups
-            rustls::ClientConfig::builder()
-                .with_root_certificates(roots)
-                .with_no_client_auth()
-        }
-        // Default TLS client config with native roots
-        None => rustls::ClientConfig::builder()
-            .with_native_roots()?
-            .with_no_client_auth(),
-    };
-    // Prepare the HTTPS connector
-    let https = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(tls)
-        .https_or_http()
-        //.enable_http1()
-        .enable_http2()
-        .build();
-
-    // Build the hyper client from the HTTPS connector.
-    let client: Client<_, Empty<Bytes>> = Client::builder(TokioExecutor::new())
-    .build(https)
-    ;
-
-    // Prepare a chain of futures which sends a GET request, inspects
-    // the returned headers, collects the whole body and prints it to
-    // stdout.
-    use hyper::{Method, Request};
+async fn main() {
     
-    let req = Request::builder()
-    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0")
-    .method(Method::GET)
-    .uri(url)
-    .body(Empty::new())
-    .expect("request builder")
-    ;
+    let url: &str = "https://avan.market/v1/api/users/catalog?app_id=252490&currency=2&page=30";
+    let body = client_http2::run_client_http2(url, client_http2::Mode::Uncheck).await.unwrap();
 
-    let fut = async move {
-        let res = client
-            .request(req)
-            //.get(url)
-            .await
-            .map_err(|e| error(format!("Could not get: {:?}", e)))?;
-        println!("Status:\n{}", res.status());
-        println!("Headers:\n{:#?}", res.headers());
+    println!("{body}");
 
-        let body = res
-            .into_body()
-            .collect()
-            .await
-            .map_err(|e| error(format!("Could not get body: {:?}", e)))?
-            .to_bytes();
-        println!("Body:\n{}", String::from_utf8_lossy(&body));
+    //avan_mod::parse_avan::get_response().await;
 
-        Ok(())
-    };
-
-    fut.await
 }
+
