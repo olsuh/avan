@@ -1,0 +1,15 @@
+GET /v1/api/users/catalog?app_id=252490&currency=2&page=30 HTTP/1.1
+Host: avan.market
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0
+Accept: application/json
+Accept-Language: ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3
+Referer: https://avan.market/ru/market/rust?page=30
+Content-Type: application/json
+Connection: keep-alive
+Cookie: __cflb=02DiuGa87D2dctS5ktLNzpvSQgAYtqmuqJf5riM3Cv82Q; cf_clearance=W8Tvj_4e0.QDDZxdIpK2aBdiOMZ2N7XN43oV1zhDqD8-1730034277-1.2.1.1-wldUtn6oUt9bvF_7mSWVX93jLX6kucKPtvZlaEVuR2uB_e6zESCXI3bgqTZItfVHJ5GgTBS593y1KntAd9P.6DKQbLkMDAoMegbOpJwhdsd7ZbSGcX34Rdt9cmZPpWc9vX31iydwULfnhSXlSKy4yfcST3CasR9e6Jwv789I4Hn4oHKKERfIHeAioS6rXe9_PE00mGg.gbOyp9MfURvU6ySeRGlbFe2m1lBibF25sgW_T2Ba2yB8v5inRg06puAtQQE9GdQoaLRzXaMDtVBxWn7WAyTED7wiZltrZKcOEEKuQV.0ynBJsJDy3CwW9IQVllwPcj2m8XxF.zMmuDTyV6OEyI.Znjl33.kQfLXlmyI; _ym_uid=1730026173609601634; _ym_d=1730026173; _ym_isad=2; _ga_8NDB4PRW90=GS1.1.1730034803.2.1.1730035253.60.0.0; _ga=GA1.1.2017288820.1730026173; adtech_uid=6fc1c5ba-1995-40bf-b6c4-931a9ac71e21%3Aavan.market; top100_id=t1.7726955.303295770.1730026174615; t3_sid_7726955=s1.1570861095.1730034799544.1730035253821.2.35; i18next=ru; _ym_visorc=w
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+Sec-Fetch-Site: same-origin
+If-None-Match: W/"2118f-OV2nNaNHdubC5BV1MYncHJ2TwZU"
+Priority: u=4
+Accept-Encoding: gzip, deflate
