@@ -1,16 +1,10 @@
 // Simple HTTPS GET client based on hyper-rustls
-//
-// First parameter is the mandatory URL to GET.
-// Second parameter is an optional path to CA store.
 use http_body_util::{BodyExt, Empty};
-use hyper::body::Bytes;
+use bytes::Bytes;
+use http::{Method, Request};
 use hyper_rustls::ConfigBuilderExt;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
-use tokio::io;
-
-//use http::Uri;
-//use std::str::FromStr;
-
+use std::io;
 
 fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
@@ -25,8 +19,6 @@ pub enum Mode {
 pub async fn run_client_http2(url: &str, mode: Mode) -> io::Result<String> {
     // Set a process wide default crypto provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
-
-    //let url= Uri::from_str(url).map_err(|e| error(format!("{}", e)))?;
 
     // Default TLS client config with native roots
     let tls = rustls::ClientConfig::builder()
@@ -48,7 +40,6 @@ pub async fn run_client_http2(url: &str, mode: Mode) -> io::Result<String> {
     // Prepare a chain of futures which sends a GET request, inspects
     // the returned headers, collects the whole body and prints it to
     // stdout.
-    use hyper::{Method, Request};
     
     let req = Request::builder()
     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0")
