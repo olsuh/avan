@@ -25,6 +25,7 @@ tokio-rustls = { version = "0.26", default-features = false }
 tower-service = "0.3"
 webpki-roots = { version = "0.26", optional = true }
 futures-util = { version = "0.3", default-features = false }
+cmake = "0.1.51"
 
 [dependencies.hyper-rustls]
 version = "0.27"

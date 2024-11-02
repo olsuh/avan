@@ -1,7 +1,4 @@
-// Simple HTTPS GET client based on hyper-rustls
-//
-// First parameter is the mandatory URL to GET.
-// Second parameter is an optional path to CA store.
+
 use http::Uri;
 use http_body_util::{BodyExt, Empty};
 use hyper::body::Bytes;
@@ -11,9 +8,9 @@ use rustls::RootCertStore;
 
 use std::str::FromStr;
 use std::{fs, io};
-
+use std::error::Error;
 fn main() {
-    // Send GET request and inspect result, with proper error handling.
+    
     if let Err(e) = run_client_http2() {
         eprintln!("FAILED: {}", e);
         std::process::exit(1);
@@ -26,8 +23,7 @@ fn error(err: String) -> io::Error {
 
 #[tokio::main]
 async fn run_client_http2() -> io::Result<()> {
-    // Set a process wide default crypto provider.
-    //#[cfg(feature = "ring")]
+
     let _ = rustls::crypto::ring::default_provider().install_default();
     //#[cfg(feature = "aws-lc-rs")]
     //let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
