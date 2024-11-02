@@ -1,7 +1,7 @@
 // Simple HTTPS GET client based on hyper-rustls
-use http_body_util::{BodyExt, Empty};
 use bytes::Bytes;
 use http::{Method, Request};
+use http_body_util::{BodyExt, Empty};
 use hyper_rustls::ConfigBuilderExt;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use std::io;
@@ -22,9 +22,9 @@ pub async fn run_client_http2(url: &str, mode: Mode) -> io::Result<String> {
 
     // Default TLS client config with native roots
     let tls = rustls::ClientConfig::builder()
-            .with_native_roots()?
-            .with_no_client_auth();
-    
+        .with_native_roots()?
+        .with_no_client_auth();
+
     // Prepare the HTTPS connector
     let https = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(tls)
@@ -34,19 +34,21 @@ pub async fn run_client_http2(url: &str, mode: Mode) -> io::Result<String> {
         .build();
 
     // Build the hyper client from the HTTPS connector.
-    let client: Client<_, Empty<Bytes>> = Client::builder(TokioExecutor::new())
-    .build(https);
+    let client: Client<_, Empty<Bytes>> = Client::builder(TokioExecutor::new()).build(https);
 
     // Prepare a chain of futures which sends a GET request, inspects
     // the returned headers, collects the whole body and prints it to
     // stdout.
-    
+
     let req = Request::builder()
-    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0")
-    .method(Method::GET)
-    .uri(url)
-    .body(Empty::new())
-    .expect("request builder");
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
+        )
+        .method(Method::GET)
+        .uri(url)
+        .body(Empty::new())
+        .expect("request builder");
 
     let fut = async move {
         let res = client
@@ -68,13 +70,14 @@ pub async fn run_client_http2(url: &str, mode: Mode) -> io::Result<String> {
 
         let ret = match mode {
             // вернет без проверки
-            Mode::Uncheck => unsafe { String::from_utf8_unchecked(body.to_vec())},
+            Mode::Uncheck => unsafe { String::from_utf8_unchecked(body.to_vec()) },
             // вернет все или ошибку
-            Mode::Check => String::from_utf8(body.to_vec()).map_err(|e| error(format!("Could not get body: {:?}", e)))?,
-            // вернет с потерей символов 
+            Mode::Check => String::from_utf8(body.to_vec())
+                .map_err(|e| error(format!("Could not get body: {:?}", e)))?,
+            // вернет с потерей символов
             Mode::Lossy => String::from_utf8_lossy(&body).into_owned(),
         };
-        
+
         Ok(ret)
     };
 
