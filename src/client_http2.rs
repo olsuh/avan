@@ -10,13 +10,13 @@ fn error(err: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
 }
 
-pub enum ModeUTF8Check {
+pub enum Mode {
     Uncheck,
     Check,
     Lossy,
 }
 
-pub async fn get_http_body(url: &str, mode_utf8_check: ModeUTF8Check) -> io::Result<String> {
+pub async fn run_client_http2(url: &str, mode: Mode) -> io::Result<String> {
     // Set a process wide default crypto provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -29,7 +29,8 @@ pub async fn get_http_body(url: &str, mode_utf8_check: ModeUTF8Check) -> io::Res
     let https = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(tls)
         .https_or_http()
-        .enable_all_versions()
+        //.enable_http1()
+        .enable_http2()
         .build();
 
     // Build the hyper client from the HTTPS connector.
@@ -67,14 +68,14 @@ pub async fn get_http_body(url: &str, mode_utf8_check: ModeUTF8Check) -> io::Res
 
         //println!("Body:\n{}", String::from_utf8_lossy(&body));
 
-        let ret = match mode_utf8_check {
+        let ret = match mode {
             // вернет без проверки
-            ModeUTF8Check::Uncheck => unsafe { String::from_utf8_unchecked(body.to_vec()) },
+            Mode::Uncheck => unsafe { String::from_utf8_unchecked(body.to_vec()) },
             // вернет все или ошибку
-            ModeUTF8Check::Check => String::from_utf8(body.to_vec())
+            Mode::Check => String::from_utf8(body.to_vec())
                 .map_err(|e| error(format!("Could not get body: {:?}", e)))?,
             // вернет с потерей символов
-            ModeUTF8Check::Lossy => String::from_utf8_lossy(&body).into_owned(),
+            Mode::Lossy => String::from_utf8_lossy(&body).into_owned(),
         };
 
         Ok(ret)
