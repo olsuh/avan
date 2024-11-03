@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use crate::client_http2;
+use rustls::crypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 
 type FloatStr = f64;
 type Float = f64;
-type DataStr = String;
 
 use serde_aux::prelude::*;
 
@@ -12,13 +14,7 @@ use serde_aux::prelude::*;
 pub struct Root {
     count: u32,
     page_count: u32,
-    limit: u32,
-    prev_page: Option<u32>,
-    page: u32,
-    next_page: Option<u32>,
     data: Vec<Item>,
-    #[serde(rename = "rateId")]
-    rate_id: u32,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
@@ -35,6 +31,8 @@ pub struct Variant {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     sell_price: FloatStr,
 }
+
+
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct SellItems {
@@ -53,24 +51,15 @@ pub async fn parse_avan() {
             println!("Ошибка чтения JSON : {} ", e);
             let root_0 = Root::default();
 
-            /*
-            let mut o_from_file = serde_json::from_str(&body).unwrap();
-            let o_def = serde_json::to_value(&root_0).unwrap();
-
-            add_default(&mut o_from_file, &o_def);
-
-            root_0 = serde_json::from_value(o_from_file).unwrap();*/
             root_0
         }
     };
 
-    println!("{root:?}");
+    println!("{root:#?}");
 }
 
-/*fn add_default(a: &mut Value, def: &Value) {
-    if let (&mut Value::Object(ref mut a), &Value::Object(ref def)) = (a, def) {
-        for (k, v) in def {
-            add_default(a.entry(k.as_str()).or_insert(v.clone()), v);
-        }
-    }
-}*/
+pub fn convert_item() {
+    let item: HashMap<Item, u16> = HashMap::new();
+
+}
+
