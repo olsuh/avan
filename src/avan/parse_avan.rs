@@ -24,7 +24,21 @@ pub struct Root {
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct Item {
+    id: u32,
+    rarity: Option<String>,
+    quality: Option<String>,
+    phase: Option<String>,
+    icon_url: String,
+    slot: Option<String>,
+    type_: Option<String>,
+    type_ru: Option<String>,
+    weapon: String,
+    hero: Option<String>,
     full_name: String,
+    full_name_ru: Option<String>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    steam_price: FloatStr,
+    profit_percentage: Float,
     variants: Vec<Variant>,
     sell_items: Vec<SellItems>,
 }
@@ -32,13 +46,22 @@ pub struct Item {
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct Variant {
+    id: u32,
+    quality: Option<String>,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     sell_price: FloatStr,
+    phase: Option<String>,
 }
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct SellItems {
+    id: u32,
+    float: Option<String>,
     sell_price: Float,
+    unhold_at: DataStr,
+    preview_link: Option<String>,
+    inspect_in_game: Option<String>,
+    item_stickers: Vec<()>,
 }
 
 pub async fn parse_avan() {
@@ -64,50 +87,7 @@ pub async fn parse_avan() {
         }
     };
 
-    println!("get items - {}", root.data.len());
-    assert_eq!(root.count as usize, root.data.len());
-    assert_eq!(root.page_count, root.page);
-
-    for item in root.data {
-
-        let item_url = item.full_name.replace(" ", "%20");
-
-        let url = format!("https://steamcommunity.com/market/listings/{app_id}/{item_url}");
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck)
-            .await
-            .unwrap();
-        dbg!(url);
-        //	Market_LoadOrderSpread( 176250984 );
-        let substr1 = "Market_LoadOrderSpread(";
-        let substr2 = ")";
-        let Some(beg_pos) = body.find(substr1) else {continue};
-        let beg_pos = beg_pos + substr1.len();
-        let next_str = &body[beg_pos..];
-        let Some(end_pos) = next_str.find(substr2) else {continue};
-        let item_id = &next_str[..end_pos];
-
-        let item_id = String::from(item_id);
-        let item_id = item_id.trim();
-        dbg!(&item_id);
-
-        let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck)
-            .await
-            .unwrap();
-
-        dbg!(url);
-        let v: Value = serde_json::from_str(&body).unwrap();
-        let body = serde_json::to_string_pretty(&v).unwrap();
-        let file_name = item.full_name.replace(" ", "_")+".json";
-        let mut f = fs::File::create(&file_name).expect(&format!("создаем файл {file_name}"));
-        f.write_all(body.as_bytes()).expect(&format!("пишем body в файл {file_name}"));
-        println!("записали в файл {file_name}... спим 2 минуты...");
-
-        sleep(Duration::from_millis(2*60*10)).await;
-    }
-
-
-
+    println!("{root:?}");
 }
 
 /*fn add_default(a: &mut Value, def: &Value) {
