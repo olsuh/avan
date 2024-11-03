@@ -1,6 +1,4 @@
-use std::{fs, io::Write, time::Duration};
-
-use crate::client_http2::{get_http_body, ModeUTF8Check};
+use crate::client_http2;
 use serde::{Deserialize, Serialize};
 
 type FloatStr = f64;
@@ -8,8 +6,6 @@ type Float = f64;
 type DataStr = String;
 
 use serde_aux::prelude::*;
-use serde_json::Value;
-use tokio::time::sleep;
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
@@ -46,12 +42,10 @@ pub struct SellItems {
 }
 
 pub async fn parse_avan() {
-    let app_id = "252490";
-    let url = format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
-    let body = get_http_body(&url, ModeUTF8Check::Uncheck)
+    let url: &str = "https://avan.market/v1/api/users/catalog?app_id=252490&currency=2&page=30";
+    let body = client_http2::run_client_http2(url, client_http2::Mode::Uncheck)
         .await
         .unwrap();
-    dbg!(url);
 
     let root: Root = match serde_json::from_str(&body) {
         Ok(c) => c,
