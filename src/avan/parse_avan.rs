@@ -76,6 +76,7 @@ struct SellDay {
 
 pub async fn parse_avan() {
     let app_id = "252490";
+    let sleep_ms = 2 * 60 * 1000;
     let url1 =
         format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
     let body1 = get_http_body(&url1, ModeUTF8Check::Uncheck).await.unwrap();
@@ -104,21 +105,37 @@ pub async fn parse_avan() {
 
     for item in root.data {
         let item_url = item.full_name.replace(" ", "%20");
-
         let url = format!("https://steamcommunity.com/market/listings/{app_id}/{item_url}");
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
-        //dbg!(url);
 
-        let substr1 = "line1=";
-        let substr2 = "g_timePriceHistoryEarliest";
-        let Some(line1) = substr(&body, substr1, substr2) else {
-            continue;
+        let mut body;
+        let line1 = loop {
+            body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
+            //dbg!(url);
+
+            let substr1 = "line1=";
+            let substr2 = "g_timePriceHistoryEarliest";
+            let Some(line1) = substr(&body, substr1, substr2) else {
+                eprintln!(
+                    "{} не нашли line1, длина body {}",
+                    item.full_name,
+                    body.len()
+                );
+                println!("поспим {} ...", sleep_ms);
+                tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+                continue;
+            };
+            break (line1);
         };
+
         let line1 = line1.trim();
         let line1 = &line1[..line1.len() - 1];
 
-        let Ok(steam_sell) = serde_json::from_str::<Vec<SellDay>>(line1) else {
-            continue;
+        let steam_sell = match serde_json::from_str::<Vec<SellDay>>(line1) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{} json::from_str: {}", item.full_name, e);
+                continue;
+            }
         };
 
         let to_data = chrono::offset::Local::now()
@@ -141,17 +158,27 @@ pub async fn parse_avan() {
             max_price = max_price.max(steam_day.price);
             min_price = min_price.min(steam_day.price);
         }
-        
+
         //dbg!(sum_cnt, sum_sum, sum_sum / sum_cnt, min_price, max_price);
 
-        let avan_price = if !item.variants.is_empty() {item.variants[0].sell_price} else {0.0};
+        let avan_price = if !item.variants.is_empty() {
+            item.variants[0].sell_price
+        } else {
+            0.0
+        };
 
-        println!("{} {} - кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
-        item.full_name, avan_price, 
-        sum_cnt, sum_sum, sum_sum / sum_cnt, min_price, max_price);
+        println!(
+            "{} {} - кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
+            item.full_name,
+            avan_price,
+            sum_cnt,
+            sum_sum,
+            sum_sum / sum_cnt,
+            min_price,
+            max_price
+        );
 
-        tokio::time::sleep(std::time::Duration::from_millis(2 * 60 * 1000)).await;
-        
+        //tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
     }
 }
 
