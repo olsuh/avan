@@ -15,34 +15,34 @@ use tokio::time::sleep;
 #[serde(default)]
 pub struct Root {
     count: u32,
-    page_count: u32,
-    limit: u32,
-    prev_page: Option<u32>,
-    page: u32,
-    next_page: Option<u32>,
+    //page_count: u32,
+    //limit: u32,
+    //prev_page: Option<u32>,
+    //page: u32,
+    //next_page: Option<u32>,
     data: Vec<Item>,
-    #[serde(rename = "rateId")]
-    rate_id: u32,
+    //#[serde(rename = "rateId")]
+    //rate_id: u32,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct Item {
-    id: u32,
-    rarity: Option<String>,
-    quality: Option<String>,
-    phase: Option<String>,
-    icon_url: String,
-    slot: Option<String>,
-    type_: Option<String>,
-    type_ru: Option<String>,
-    weapon: String,
-    hero: Option<String>,
+    //id: u32,
+    //rarity: Option<String>,
+    //quality: Option<String>,
+    //phase: Option<String>,
+    //icon_url: String,
+    //slot: Option<String>,
+    //type_: Option<String>,
+    //type_ru: Option<String>,
+    //weapon: String,
+    //hero: Option<String>,
     full_name: String,
-    full_name_ru: Option<String>,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    steam_price: FloatStr,
-    profit_percentage: Float,
+    //full_name_ru: Option<String>,
+    //#[serde(deserialize_with = "deserialize_number_from_string")]
+    //steam_price: FloatStr,
+    //profit_percentage: Float,
     variants: Vec<Variant>,
     sell_items: Vec<SellItems>,
 }
@@ -50,22 +50,22 @@ pub struct Item {
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct Variant {
-    id: u32,
-    quality: Option<String>,
+    //id: u32,
+    //quality: Option<String>,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     sell_price: FloatStr,
-    phase: Option<String>,
+    //phase: Option<String>,
 }
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct SellItems {
-    id: u32,
-    float: Option<String>,
+    //id: u32,
+    //float: Option<String>,
     sell_price: Float,
-    unhold_at: DataStr,
-    preview_link: Option<String>,
-    inspect_in_game: Option<String>,
-    item_stickers: Vec<()>,
+    //unhold_at: DataStr,
+    //preview_link: Option<String>,
+    //inspect_in_game: Option<String>,
+    //item_stickers: Vec<()>,
 }
 
 pub async fn parse_avan() {
@@ -95,7 +95,7 @@ pub async fn parse_avan() {
 
     println!("get items - {}", root.data.len());
     assert_eq!(root.count as usize, root.data.len());
-    assert_eq!(root.page_count, root.page);
+    //assert_eq!(root.page_count, root.page);
 
     for item in root.data {
 
