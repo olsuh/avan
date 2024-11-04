@@ -7,6 +7,7 @@ type Float = f64;
 type DataStr = String;
 
 use serde_aux::prelude::*;
+use serde_json::Value;
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
@@ -85,7 +86,7 @@ pub async fn parse_avan() {
     let root: Root = match serde_json::from_str(&body1) {
         Ok(c) => c,
         Err(e) => {
-            println!("Ошибка чтения JSON : {} ", e);
+            println!("Ошибка чтения avan JSON : {} ", e);
             let root_0 = Root::default();
 
             /*
@@ -116,12 +117,11 @@ pub async fn parse_avan() {
             let substr2 = "g_timePriceHistoryEarliest";
             let Some(line1) = substr(&body, substr1, substr2) else {
                 eprintln!(
-                    "{} не нашли line1, длина body {}",
+                    "{} не нашли line1, длина body {}, поспим {} ...",
                     item.full_name,
-                    body.len()
+                    body.len(),
+                    sleep_ms
                 );
-                println!("{url}");
-                println!("поспим {} ...", sleep_ms);
                 tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
                 continue;
             };
@@ -160,6 +160,14 @@ pub async fn parse_avan() {
             min_price = min_price.min(steam_day.price);
         }
 
+        let Some(item_id) = find_steam_item_id(&body) else {
+            continue;
+        };
+
+        let Some(steam_first_sell_price) = item_first_sell_price(&item_id).await else {
+            continue;
+        };
+
         //dbg!(sum_cnt, sum_sum, sum_sum / sum_cnt, min_price, max_price);
 
         let avan_price = if !item.variants.is_empty() {
@@ -169,17 +177,16 @@ pub async fn parse_avan() {
         };
 
         println!(
-            "{} {} - кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
+            "{} :{} - тек {} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
             item.full_name,
             avan_price,
+            steam_first_sell_price,
             sum_cnt,
             sum_sum,
             sum_sum / sum_cnt,
             min_price,
             max_price
         );
-
-        //tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
     }
 }
 
@@ -192,34 +199,44 @@ pub fn substr<'a>(str: &'a str, substr1: &str, substr2: &str) -> Option<&'a str>
     let Some(end_pos) = next_str.find(substr2) else {
         return None;
     };
-    let item_id = &next_str[..end_pos];
+    Some(&next_str[..end_pos])
+}
+
+fn find_steam_item_id(body: &str) -> Option<String> {
+    // Market_LoadOrderSpread( 176250984 );
+    let substr1 = "Market_LoadOrderSpread(";
+    let substr2 = ")";
+    let Some(item_id) = substr(body, substr1, substr2) else {
+        return None;
+    };
+
+    let item_id = item_id.trim();
+    let item_id = String::from(item_id);
     Some(item_id)
 }
 
-/*fn itemordershistogram() {
-        //	Market_LoadOrderSpread( 176250984 );
-        let substr1 = "Market_LoadOrderSpread(";
-        let substr2 = ")";
-        let Some(item_id) = substr(&body, substr1, substr2) else {continue};
+async fn item_first_sell_price(item_id: &str) -> Option<f64> {
+    let body = item_orders_histogram(item_id).await;
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let a = v.get("sell_order_graph").unwrap().as_array().unwrap();
+    let ret = a[0][0].as_f64();
+    //dbg!(ret);
+    ret
+}
 
-        let item_id = String::from(item_id);
-        let item_id = item_id.trim();
-        dbg!(&item_id);
+async fn item_orders_histogram(item_id: &str) -> String {
+    let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
+    let body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
+    body
 
-        let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck)
-            .await
-            .unwrap();
-
-        dbg!(url);
-        let v: Value = serde_json::from_str(&body).unwrap();
-        let body = serde_json::to_string_pretty(&v).unwrap();
-        let file_name = item.full_name.replace(" ", "_")+".json";
-        let mut f = fs::File::create(&file_name).expect(&format!("создаем файл {file_name}"));
-        f.write_all(body.as_bytes()).expect(&format!("пишем body в файл {file_name}"));
-        println!("записали в файл {file_name}... спим 2 минуты...");
-
-}*/
+    //dbg!(url);
+    //let v: Value = serde_json::from_str(&body).unwrap();
+    //let body = serde_json::to_string_pretty(&v).unwrap();
+    /*let file_name = item.full_name.replace(" ", "_")+".json";
+    let mut f = fs::File::create(&file_name).expect(&format!("создаем файл {file_name}"));
+    f.write_all(body.as_bytes()).expect(&format!("пишем body в файл {file_name}"));
+    println!("записали в файл {file_name}... спим 2 минуты...");*/
+}
 
 /*fn add_default(a: &mut Value, def: &Value) {
     if let (&mut Value::Object(ref mut a), &Value::Object(ref def)) = (a, def) {
