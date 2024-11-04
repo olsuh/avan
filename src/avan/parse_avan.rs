@@ -1,6 +1,5 @@
-use std::{fs, io::Write, time::Duration};
-
 use crate::client_http2::{get_http_body, ModeUTF8Check};
+use chrono::{Months, NaiveDate};
 use serde::{Deserialize, Serialize};
 
 type FloatStr = f64;
@@ -8,8 +7,6 @@ type Float = f64;
 type DataStr = String;
 
 use serde_aux::prelude::*;
-use serde_json::Value;
-use tokio::time::sleep;
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
@@ -68,15 +65,24 @@ pub struct SellItems {
     //item_stickers: Vec<()>,
 }
 
+#[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
+#[serde(default)]
+struct SellDay {
+    data: String,
+    price: Float,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    count: FloatStr,
+}
+
 pub async fn parse_avan() {
     let app_id = "252490";
-    let url = format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
-    let body = get_http_body(&url, ModeUTF8Check::Uncheck)
-        .await
-        .unwrap();
-    dbg!(url);
+    let sleep_ms = 2 * 60 * 1000;
+    let url1 =
+        format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
+    let body1 = get_http_body(&url1, ModeUTF8Check::Uncheck).await.unwrap();
+    dbg!(url1);
 
-    let root: Root = match serde_json::from_str(&body) {
+    let root: Root = match serde_json::from_str(&body1) {
         Ok(c) => c,
         Err(e) => {
             println!("Ошибка чтения JSON : {} ", e);
@@ -98,22 +104,103 @@ pub async fn parse_avan() {
     //assert_eq!(root.page_count, root.page);
 
     for item in root.data {
-
         let item_url = item.full_name.replace(" ", "%20");
-
         let url = format!("https://steamcommunity.com/market/listings/{app_id}/{item_url}");
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck)
-            .await
+
+        let mut body;
+        let line1 = loop {
+            body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
+            //dbg!(url);
+
+            let substr1 = "line1=";
+            let substr2 = "g_timePriceHistoryEarliest";
+            let Some(line1) = substr(&body, substr1, substr2) else {
+                eprintln!(
+                    "{} не нашли line1, длина body {}",
+                    item.full_name,
+                    body.len()
+                );
+                println!("{url}");
+                println!("поспим {} ...", sleep_ms);
+                tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+                continue;
+            };
+            break (line1);
+        };
+
+        let line1 = line1.trim();
+        let line1 = &line1[..line1.len() - 1];
+
+        let steam_sell = match serde_json::from_str::<Vec<SellDay>>(line1) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{} json::from_str: {}", item.full_name, e);
+                continue;
+            }
+        };
+
+        let to_data = chrono::offset::Local::now()
+            .date_naive()
+            .checked_sub_months(Months::new(1))
             .unwrap();
-        dbg!(url);
+        let mut sum_cnt = 0.;
+        let mut sum_sum = 0.;
+        let mut max_price: Float = 0.;
+        let mut min_price: Float = 1000000.;
+
+        for steam_day in steam_sell.iter().rev() {
+            let (date, _) = NaiveDate::parse_and_remainder(&steam_day.data, "%b %d %Y").unwrap();
+
+            if date < to_data {
+                break;
+            }
+            sum_cnt += steam_day.count;
+            sum_sum += steam_day.count * steam_day.price;
+            max_price = max_price.max(steam_day.price);
+            min_price = min_price.min(steam_day.price);
+        }
+
+        //dbg!(sum_cnt, sum_sum, sum_sum / sum_cnt, min_price, max_price);
+
+        let avan_price = if !item.variants.is_empty() {
+            item.variants[0].sell_price
+        } else {
+            0.0
+        };
+
+        println!(
+            "{} {} - кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
+            item.full_name,
+            avan_price,
+            sum_cnt,
+            sum_sum,
+            sum_sum / sum_cnt,
+            min_price,
+            max_price
+        );
+
+        //tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+    }
+}
+
+pub fn substr<'a>(str: &'a str, substr1: &str, substr2: &str) -> Option<&'a str> {
+    let Some(beg_pos) = str.find(substr1) else {
+        return None;
+    };
+    let beg_pos = beg_pos + substr1.len();
+    let next_str = &str[beg_pos..];
+    let Some(end_pos) = next_str.find(substr2) else {
+        return None;
+    };
+    let item_id = &next_str[..end_pos];
+    Some(item_id)
+}
+
+/*fn itemordershistogram() {
         //	Market_LoadOrderSpread( 176250984 );
         let substr1 = "Market_LoadOrderSpread(";
         let substr2 = ")";
-        let Some(beg_pos) = body.find(substr1) else {continue};
-        let beg_pos = beg_pos + substr1.len();
-        let next_str = &body[beg_pos..];
-        let Some(end_pos) = next_str.find(substr2) else {continue};
-        let item_id = &next_str[..end_pos];
+        let Some(item_id) = substr(&body, substr1, substr2) else {continue};
 
         let item_id = String::from(item_id);
         let item_id = item_id.trim();
@@ -132,12 +219,7 @@ pub async fn parse_avan() {
         f.write_all(body.as_bytes()).expect(&format!("пишем body в файл {file_name}"));
         println!("записали в файл {file_name}... спим 2 минуты...");
 
-        sleep(Duration::from_millis(2*60*1000)).await;
-    }
-
-
-
-}
+}*/
 
 /*fn add_default(a: &mut Value, def: &Value) {
     if let (&mut Value::Object(ref mut a), &Value::Object(ref def)) = (a, def) {
