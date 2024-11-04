@@ -120,6 +120,7 @@ pub async fn parse_avan() {
                     item.full_name,
                     body.len()
                 );
+                println!("{url}");
                 println!("поспим {} ...", sleep_ms);
                 tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
                 continue;
