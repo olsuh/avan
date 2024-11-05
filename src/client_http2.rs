@@ -47,7 +47,7 @@ pub async fn get_http_body(url: &str, mode_utf8_check: ModeUTF8Check) -> io::Res
         .method(Method::GET)
         .uri(url)
         .body(Empty::new())
-        .expect("request builder");
+        .map_err(|e| error(format!("Request builder: {e:?} {url}")))?;
 
     let fut = async move {
         let res = client
