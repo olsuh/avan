@@ -106,12 +106,12 @@ pub async fn parse_avan() {
     assert_eq!(root.page_count, root.page);
 
     for item in root.data {
-        let item_url = item.full_name.replace(" ", "%20");
-        let url = format!("https://steamcommunity.com/market/listings/{app_id}/{item_url}");
+        let url = format!("https://steamcommunity.com/market/listings/{app_id}/{}", item.full_name);
+        let url = url::Url::parse(&url).unwrap();
 
         let mut body;
         let line1 = loop {
-            body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
+            body = get_http_body(url.as_ref(), ModeUTF8Check::Uncheck).await.unwrap();
             //dbg!(url);
 
             let substr1 = "line1=";
