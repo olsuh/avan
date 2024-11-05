@@ -78,6 +78,7 @@ struct SellDay {
 pub async fn parse_avan() {
     let app_id = "252490";
     let sleep_ms = 2 * 60 * 1000;
+    let steam_seller_ratio = 1.-0.13;
     let url1 =
         format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
     let body1 = get_http_body(&url1, ModeUTF8Check::Uncheck).await.unwrap();
@@ -177,11 +178,11 @@ pub async fn parse_avan() {
         };
 
         println!(
-            "{} :{} - тек {} разн {:.2} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
+            "{} :{} - тек {} приб {:.2} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
             item.full_name,
             avan_price,
             steam_first_sell_price,
-            steam_first_sell_price-avan_price,
+            steam_first_sell_price*steam_seller_ratio-avan_price,
             sum_cnt,
             sum_sum,
             sum_sum / sum_cnt,
