@@ -177,10 +177,11 @@ pub async fn parse_avan() {
         };
 
         println!(
-            "{} :{} - тек {} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
+            "{} :{} - тек {} разн {:.2} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
             item.full_name,
             avan_price,
             steam_first_sell_price,
+            steam_first_sell_price-avan_price,
             sum_cnt,
             sum_sum,
             sum_sum / sum_cnt,
