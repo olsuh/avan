@@ -77,7 +77,9 @@ struct SellDay {
 
 pub async fn parse_avan() {
     let app_id = "252490";
-    let sleep_ms = 2 * 60 * 1000;
+    let sleep_ms_on_net_error = 2 * 1000;
+    let sleep_ms_on_block = 25 * 6 * 1000;
+    
     let steam_seller_ratio = 1. - 0.13;
     let url1 =
         format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
@@ -106,24 +108,33 @@ pub async fn parse_avan() {
     assert_eq!(root.page_count, root.page);
 
     for item in root.data {
-        let url = format!("https://steamcommunity.com/market/listings/{app_id}/{}", item.full_name);
+        let url = format!(
+            "https://steamcommunity.com/market/listings/{app_id}/{}",
+            item.full_name
+        );
         let url = url::Url::parse(&url).unwrap();
 
         let mut body;
         let line1 = loop {
-            body = get_http_body(url.as_ref(), ModeUTF8Check::Uncheck).await.unwrap();
-            //dbg!(url);
+            body = match get_http_body(url.as_ref(), ModeUTF8Check::Uncheck).await {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("{e:?}, поспим {} ms ...", sleep_ms_on_net_error);
+                    tokio::time::sleep(std::time::Duration::from_millis(sleep_ms_on_net_error)).await;
+                    continue;
+                }
+            };
 
             let substr1 = "line1=";
             let substr2 = "g_timePriceHistoryEarliest";
             let Some(line1) = substr(&body, substr1, substr2) else {
                 eprintln!(
-                    "{} не нашли line1, длина body {}, поспим {} ...",
+                    "{} не нашли line1, длина body {}, поспим {} ms ...",
                     item.full_name,
                     body.len(),
-                    sleep_ms
+                    sleep_ms_on_block
                 );
-                tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(sleep_ms_on_block)).await;
                 continue;
             };
             break (line1);
