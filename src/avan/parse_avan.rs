@@ -1,11 +1,10 @@
 use crate::client_http2::{get_http_body, ModeUTF8Check};
 use chrono::{Months, NaiveDate};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{fs, io::Write};
+
 type FloatStr = f64;
 type Float = f64;
-//type DataStr = String;
+type DataStr = String;
 
 use serde_aux::prelude::*;
 use serde_json::Value;
@@ -14,34 +13,34 @@ use serde_json::Value;
 #[serde(default)]
 pub struct Root {
     count: u32,
-    //page_count: u32,
-    //limit: u32,
-    //prev_page: Option<u32>,
-    //page: u32,
-    //next_page: Option<u32>,
+    page_count: u32,
+    limit: u32,
+    prev_page: Option<u32>,
+    page: u32,
+    next_page: Option<u32>,
     data: Vec<Item>,
-    //#[serde(rename = "rateId")]
-    //rate_id: u32,
+    #[serde(rename = "rateId")]
+    rate_id: u32,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct Item {
-    //id: u32,
-    //rarity: Option<String>,
-    //quality: Option<String>,
-    //phase: Option<String>,
-    //icon_url: String,
-    //slot: Option<String>,
-    //type_: Option<String>,
-    //type_ru: Option<String>,
-    //weapon: String,
-    //hero: Option<String>,
+    id: u32,
+    rarity: Option<String>,
+    quality: Option<String>,
+    phase: Option<String>,
+    icon_url: String,
+    slot: Option<String>,
+    type_: Option<String>,
+    type_ru: Option<String>,
+    weapon: String,
+    hero: Option<String>,
     full_name: String,
-    //full_name_ru: Option<String>,
-    //#[serde(deserialize_with = "deserialize_number_from_string")]
-    //steam_price: FloatStr,
-    //profit_percentage: Float,
+    full_name_ru: Option<String>,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    steam_price: FloatStr,
+    profit_percentage: Float,
     variants: Vec<Variant>,
     sell_items: Vec<SellItems>,
 }
@@ -49,22 +48,22 @@ pub struct Item {
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct Variant {
-    //id: u32,
-    //quality: Option<String>,
+    id: u32,
+    quality: Option<String>,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     sell_price: FloatStr,
-    //phase: Option<String>,
+    phase: Option<String>,
 }
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
 #[serde(default)]
 pub struct SellItems {
-    //id: u32,
-    //float: Option<String>,
+    id: u32,
+    float: Option<String>,
     sell_price: Float,
-    //unhold_at: DataStr,
-    //preview_link: Option<String>,
-    //inspect_in_game: Option<String>,
-    //item_stickers: Vec<()>,
+    unhold_at: DataStr,
+    preview_link: Option<String>,
+    inspect_in_game: Option<String>,
+    item_stickers: Vec<()>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
@@ -82,7 +81,6 @@ pub async fn parse_avan() {
     let sleep_ms_on_block = 25 * 6 * 1000;
     
     let steam_seller_ratio = 1. - 0.13;
-
     let url1 =
         format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
     let body1 = get_http_body(&url1, ModeUTF8Check::Uncheck).await.unwrap();
@@ -107,10 +105,9 @@ pub async fn parse_avan() {
 
     println!("get items - {}", root.data.len());
     assert_eq!(root.count as usize, root.data.len());
-    //assert_eq!(root.page_count, root.page);
+    assert_eq!(root.page_count, root.page);
 
     for item in root.data {
-
         let url = format!(
             "https://steamcommunity.com/market/listings/{app_id}/{}",
             item.full_name
@@ -203,11 +200,6 @@ pub async fn parse_avan() {
             min_price,
             max_price
         );
-
-        get_steam_info(&item).await;
-        item_orders_histogram(&item).await;
-        //tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
-
     }
 }
 
@@ -223,7 +215,6 @@ pub fn substr<'a>(str: &'a str, substr1: &str, substr2: &str) -> Option<&'a str>
     Some(&next_str[..end_pos])
 }
 
-
 fn find_steam_item_id(body: &str) -> Option<String> {
     // Market_LoadOrderSpread( 176250984 );
     let substr1 = "Market_LoadOrderSpread(";
@@ -231,108 +222,6 @@ fn find_steam_item_id(body: &str) -> Option<String> {
     let Some(item_id) = substr(body, substr1, substr2) else {
         return None;
     };
-
-async fn get_steam_info(item: &Item) {
-    let app_id = "252490";
-    let sleep_ms = 2 * 60 * 1000;
-    let item_url = item.full_name.replace(" ", "%20");
-    let url = format!("https://steamcommunity.com/market/listings/{app_id}/{item_url}");
-
-    let mut body;
-    let line1 = loop {
-        body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
-        //dbg!(url);
-
-        let substr1 = "line1=";
-        let substr2 = "g_timePriceHistoryEarliest";
-        let Some(line1) = substr(&body, substr1, substr2) else {
-            eprintln!(
-                "{} не нашли line1, длина body {}",
-                item.full_name,
-                body.len()
-            );
-            println!("{url}");
-            println!("поспим {} ...", sleep_ms);
-            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
-            continue;
-        };
-        break (line1);
-    };
-
-    let line1 = line1.trim();
-    let line1 = &line1[..line1.len() - 1];
-
-    let steam_sell = match serde_json::from_str::<Vec<SellDay>>(line1) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("{} json::from_str: {}", item.full_name, e);
-            return ;
-        }
-    };
-
-    let to_data = chrono::offset::Local::now()
-        .date_naive()
-        .checked_sub_months(Months::new(1))
-        .unwrap();
-    let mut sum_cnt = 0.;
-    let mut sum_sum = 0.;
-    let mut max_price: Float = 0.;
-    let mut min_price: Float = 1000000.;
-    //add current price in steam
-    let mut current_price: Float = 0.;
-
-    for steam_day in steam_sell.iter().rev() {
-        let (date, _) = NaiveDate::parse_and_remainder(&steam_day.data, "%b %d %Y").unwrap();
-
-        if date < to_data {
-            break;
-        }
-        sum_cnt += steam_day.count;
-        sum_sum += steam_day.count * steam_day.price;
-        max_price = max_price.max(steam_day.price);
-        min_price = min_price.min(steam_day.price);
-
-    }
-
-    //dbg!(sum_cnt, sum_sum, sum_sum / sum_cnt, min_price, max_price);
-
-    let avan_price = if !item.variants.is_empty() {
-        item.variants[0].sell_price
-    } else {
-        0.0
-    };
-
-    println!(
-        "{} {} - тек {:.2} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
-        item.full_name,
-        avan_price,
-        current_price,
-        sum_cnt,
-        sum_sum,
-        sum_sum / sum_cnt,
-        min_price,
-        max_price
-    );
-
-    //tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
-}
-
-
-
-async fn item_orders_histogram(item: &Item) {
-        //	Market_LoadOrderSpread( 176250984 );
-        let item_id = item.full_name.replace(" ", "%20");
-        let substr1 = "Market_LoadOrderSpread(";
-        let substr2 = ")";
-        let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck)
-            .await
-            .unwrap();
-        let Some(item_id) = substr(&body, substr1, substr2) else {
-            eprintln!("{} не нашли item_id", item.full_name);
-            return;
-        };
-
 
     let item_id = item_id.trim();
     let item_id = String::from(item_id);
@@ -348,12 +237,10 @@ async fn item_first_sell_price(item_id: &str) -> Option<f64> {
     ret
 }
 
-
 async fn item_orders_histogram(item_id: &str) -> String {
     let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
     let body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
     body
-
 
     //dbg!(url);
     //let v: Value = serde_json::from_str(&body).unwrap();
