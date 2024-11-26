@@ -1,4 +1,9 @@
-use crate::client_http2::{get_http_body, ModeUTF8Check};
+use std::{
+    process::exit,
+    sync::{Arc, RwLock},
+};
+
+use crate::client_http2::{get_http_body, ModeUTF8Check, ProxyApp, ProxyDriver};
 use chrono::{Months, NaiveDate};
 use serde::{Deserialize, Serialize};
 
@@ -77,50 +82,96 @@ struct SellDay {
 
 pub async fn parse_avan() {
     let app_id = "252490";
-    let sleep_ms_on_net_error = 2 * 1000;
-    let sleep_ms_on_block = 25 * 6 * 1000;
-    
-    let steam_seller_ratio = 1. - 0.13;
-    let url1 =
-        format!("https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page=100");
-    let body1 = get_http_body(&url1, ModeUTF8Check::Uncheck).await.unwrap();
-    dbg!(url1);
 
-    let root: Root = match serde_json::from_str(&body1) {
-        Ok(c) => c,
-        Err(e) => {
-            println!("Ошибка чтения avan JSON : {} ", e);
-            let root_0 = Root::default();
+    let proxy_drv = Arc::new(RwLock::new(ProxyDriver::new()));
+    let mut page = 1;
+    let mut root = Root::default();
+    loop {
+        let url = format!(
+            "https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page={page}"
+        );
+        let body = get_http_body(&url, ModeUTF8Check::Uncheck, None)
+            .await
+            .unwrap();
+        dbg!(url);
 
-            /*
-            let mut o_from_file = serde_json::from_str(&body).unwrap();
-            let o_def = serde_json::to_value(&root_0).unwrap();
-
-            add_default(&mut o_from_file, &o_def);
-
-            root_0 = serde_json::from_value(o_from_file).unwrap();*/
-            root_0
+        let mut root_i: Root = match serde_json::from_str(&body) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("Ошибка чтения avan JSON : {} ", e);
+                println!("{body}");
+                exit(1);
+            }
+        };
+        if page == 1 {
+            root = root_i;
+        } else {
+            root.data.append(&mut root_i.data);
         }
-    };
+        page += 1;
+        if page > root.page_count {
+            break;
+        }
+    }
 
     println!("get items - {}", root.data.len());
     assert_eq!(root.count as usize, root.data.len());
-    assert_eq!(root.page_count, root.page);
+    //assert_eq!(root.page_count, root.page);
+    let v = parse_steam(proxy_drv.clone(), &root).await;
+    dbg!(v);
+}
 
-    for item in root.data {
-        let url = format!(
-            "https://steamcommunity.com/market/listings/{app_id}/{}",
-            item.full_name
-        );
-        let url = url::Url::parse(&url).unwrap();
+#[derive(Debug)]
+struct SteamItem {
+    full_name: String,
+    avan_price: f64,
+    first_sell_price: f64,
+    profit: f64,
+    sum_cnt: f64,
+    sum_sum: f64,
+    price_avg: f64,
+    price_min: f64,
+    price_max: f64,
+}
+use futures::stream::{self, StreamExt};
 
+async fn parse_steam(proxy_drv: ProxyApp, root: &Root) -> Vec<SteamItem> {
+    let check_futures = stream::iter(root.data.iter().map(|item| {
+        let value = proxy_drv.clone();
+        async move { parse_steam_item(value, &item).await }
+    }));
+
+    check_futures.buffered(30).collect().await
+}
+async fn parse_steam_item(proxy_drv: ProxyApp, item: &Item) -> SteamItem {
+    let steam_seller_ratio = 1. - 0.13;
+    let app_id = "252490";
+    let full_name = item.full_name.clone();
+    let url = format!(
+        "https://steamcommunity.com/market/listings/{app_id}/{}",
+        full_name
+    );
+    let url = url::Url::parse(&url).unwrap();
+    loop {
         let mut body;
         let line1 = loop {
-            body = match get_http_body(url.as_ref(), ModeUTF8Check::Uncheck).await {
+            body = match get_http_body(
+                url.as_ref(),
+                ModeUTF8Check::Uncheck,
+                Some(proxy_drv.clone()),
+            )
+            .await
+            {
                 Ok(b) => b,
                 Err(e) => {
-                    eprintln!("{e:?}, поспим {} ms ...", sleep_ms_on_net_error);
-                    tokio::time::sleep(std::time::Duration::from_millis(sleep_ms_on_net_error)).await;
+                    eprintln!(
+                        "{e:?}, поспим {} ms ...",
+                        proxy_drv.read().unwrap().sleep_ms_on_net_error
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        proxy_drv.read().unwrap().sleep_ms_on_net_error,
+                    ))
+                    .await;
                     continue;
                 }
             };
@@ -128,13 +179,12 @@ pub async fn parse_avan() {
             let substr1 = "line1=";
             let substr2 = "g_timePriceHistoryEarliest";
             let Some(line1) = substr(&body, substr1, substr2) else {
-                eprintln!(
-                    "{} не нашли line1, длина body {}, поспим {} ms ...",
-                    item.full_name,
-                    body.len(),
-                    sleep_ms_on_block
-                );
-                tokio::time::sleep(std::time::Duration::from_millis(sleep_ms_on_block)).await;
+                eprintln!("{} не нашли line1, длина body {}...", full_name, body.len());
+                proxy_drv.write().unwrap().ban_site();
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    proxy_drv.read().unwrap().sleep_ms_on_block,
+                ))
+                .await;
                 continue;
             };
             break (line1);
@@ -146,7 +196,7 @@ pub async fn parse_avan() {
         let steam_sell = match serde_json::from_str::<Vec<SellDay>>(line1) {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("{} json::from_str: {}", item.full_name, e);
+                eprintln!("{} json::from_str: {}", full_name, e);
                 continue;
             }
         };
@@ -157,8 +207,8 @@ pub async fn parse_avan() {
             .unwrap();
         let mut sum_cnt = 0.;
         let mut sum_sum = 0.;
-        let mut max_price: Float = 0.;
-        let mut min_price: Float = 1000000.;
+        let mut price_max: Float = 0.;
+        let mut price_min: Float = 1000000.;
 
         for steam_day in steam_sell.iter().rev() {
             let (date, _) = NaiveDate::parse_and_remainder(&steam_day.data, "%b %d %Y").unwrap();
@@ -168,15 +218,15 @@ pub async fn parse_avan() {
             }
             sum_cnt += steam_day.count;
             sum_sum += steam_day.count * steam_day.price;
-            max_price = max_price.max(steam_day.price);
-            min_price = min_price.min(steam_day.price);
+            price_max = price_max.max(steam_day.price);
+            price_min = price_min.min(steam_day.price);
         }
 
         let Some(item_id) = find_steam_item_id(&body) else {
             continue;
         };
 
-        let Some(steam_first_sell_price) = item_first_sell_price(&item_id).await else {
+        let Some(first_sell_price) = item_first_sell_price(&item_id).await else {
             continue;
         };
 
@@ -188,18 +238,31 @@ pub async fn parse_avan() {
             0.0
         };
 
+        let profit = first_sell_price * steam_seller_ratio - avan_price;
+        let price_avg = sum_sum / sum_cnt;
         println!(
             "{} :{} - тек {} приб {:.2} кол {:.0} сумма {:.2} сред {:.2} мин {} макс {}",
-            item.full_name,
+            full_name,
             avan_price,
-            steam_first_sell_price,
-            steam_first_sell_price * steam_seller_ratio - avan_price,
+            first_sell_price,
+            profit,
             sum_cnt,
             sum_sum,
-            sum_sum / sum_cnt,
-            min_price,
-            max_price
+            price_avg,
+            price_min,
+            price_max
         );
+        return SteamItem {
+            full_name,
+            avan_price,
+            first_sell_price,
+            profit,
+            sum_cnt,
+            sum_sum,
+            price_avg,
+            price_min,
+            price_max,
+        };
     }
 }
 
@@ -239,7 +302,9 @@ async fn item_first_sell_price(item_id: &str) -> Option<f64> {
 
 async fn item_orders_histogram(item_id: &str) -> String {
     let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
-    let body = get_http_body(&url, ModeUTF8Check::Uncheck).await.unwrap();
+    let body = get_http_body(&url, ModeUTF8Check::Uncheck, None)
+        .await
+        .unwrap();
     body
 
     //dbg!(url);
