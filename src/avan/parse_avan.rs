@@ -82,7 +82,7 @@ struct SellDay {
 
 pub async fn parse_avan() {
     let app_id = "252490";
-
+    let cookie = "cf_clearance=yQ0tNmV3VFnPVUfg4RHAwMtGTAZM8swDxOhL4evbv_I-1732655412-1.2.1.1-WqAkNuBo7VUUygcetpYswoJTPiE4yWGbDspb49.HCaHd.6fQZjHf94dWOX87zEG0Z6nDALp85hCgmXSSOSeiRik4MZiIDyH5qWg3iaSqlWTrvHG4QU5u1xyzhDkCX3Mw038wF2NSSzp1zip_AhvSd8YKTNrsPL6wO7fdo6lUApiT4PjpOiQi5AHVOJW2XEMoZagZv0nzQtdojkdxvh.z6aMd6AyLji7QM3KftBznDdT7KhNUxfYjQVGG3xaJDtMOpLloh1JuoTOLJEESXNjHT8o880OUQ2q5ngJax8Pf27M9a_0ix9uE9q9SSGGKAH7qX0Lbl.ToBrp3dMR.WFDqa4Y_K7PxYq1cIC4mRt0R.Jx45.JkpsDZcJNcKy9gsdoOe3XhDDgocIzgoBx8UfL2ei7cuaeDGMk9BynEKK7ztvoPpIQ85QpAn084AKGWPdEtVAVa9xMZhcsonB9cp1tw0ECNFHljq8f1Sxgs9S4.PG4";
     let proxy_drv = Arc::new(RwLock::new(ProxyDriver::new()));
     let mut page = 1;
     let mut root = Root::default();
@@ -90,7 +90,7 @@ pub async fn parse_avan() {
         let url = format!(
             "https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page={page}"
         );
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck, None)
+        let body = get_http_body(&url, ModeUTF8Check::Uncheck, None, Some(cookie))
             .await
             .unwrap();
         dbg!(url);
@@ -157,8 +157,9 @@ async fn parse_steam_item(proxy_drv: ProxyApp, item: &Item) -> SteamItem {
         let line1 = loop {
             body = match get_http_body(
                 url.as_ref(),
-                ModeUTF8Check::Uncheck,
+                ModeUTF8Check::Check,
                 Some(proxy_drv.clone()),
+                None,
             )
             .await
             {
@@ -180,11 +181,11 @@ async fn parse_steam_item(proxy_drv: ProxyApp, item: &Item) -> SteamItem {
             let substr2 = "g_timePriceHistoryEarliest";
             let Some(line1) = substr(&body, substr1, substr2) else {
                 eprintln!("{} не нашли line1, длина body {}...", full_name, body.len());
-                proxy_drv.write().unwrap().ban_site();
-                tokio::time::sleep(std::time::Duration::from_millis(
+                proxy_drv.write().unwrap().ban_site("");
+                /*tokio::time::sleep(std::time::Duration::from_millis(
                     proxy_drv.read().unwrap().sleep_ms_on_block,
                 ))
-                .await;
+                .await;*/
                 continue;
             };
             break (line1);
@@ -301,25 +302,15 @@ async fn item_first_sell_price(item_id: &str) -> Option<f64> {
 }
 
 async fn item_orders_histogram(item_id: &str) -> String {
-    let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
-    let body = get_http_body(&url, ModeUTF8Check::Uncheck, None)
-        .await
-        .unwrap();
-    body
-
-    //dbg!(url);
-    //let v: Value = serde_json::from_str(&body).unwrap();
-    //let body = serde_json::to_string_pretty(&v).unwrap();
-    /*let file_name = item.full_name.replace(" ", "_")+".json";
-    let mut f = fs::File::create(&file_name).expect(&format!("создаем файл {file_name}"));
-    f.write_all(body.as_bytes()).expect(&format!("пишем body в файл {file_name}"));
-    println!("записали в файл {file_name}... спим 2 минуты...");*/
-}
-
-/*fn add_default(a: &mut Value, def: &Value) {
-    if let (&mut Value::Object(ref mut a), &Value::Object(ref def)) = (a, def) {
-        for (k, v) in def {
-            add_default(a.entry(k.as_str()).or_insert(v.clone()), v);
+    for _i in 0..3 {
+        let url = format!("https://steamcommunity.com/market/itemordershistogram?country=UA&language=russian&currency=1&item_nameid={item_id}");
+        let body = get_http_body(&url, ModeUTF8Check::Uncheck, None, None).await;
+        match body {
+            Ok(b) => return b,
+            Err(e) => {
+                println!("{url} {e:?}");
+            }
         }
     }
-}*/
+    "".to_string()
+}

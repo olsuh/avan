@@ -27,9 +27,10 @@ pub async fn get_http_body(
     url: &str,
     mode_utf8_check: ModeUTF8Check,
     proxy_drv: Option<ProxyApp>,
+    cookie: Option<&str>,
 ) -> io::Result<String> {
     match proxy_drv {
-        None => get_http_body_2(url, mode_utf8_check).await,
+        None => get_http_body_2(url, mode_utf8_check, cookie).await,
         Some(p_d) => get_http_body_0(url, mode_utf8_check, p_d).await,
     }
 }
@@ -161,16 +162,15 @@ pub struct ProxyDriver {
     _moment_ban_site: u64,
     pub sleep_ms_on_net_error: u64,
     pub sleep_ms_on_block: u64,
+    pub steam_seller_ratio: f64,
     pub db_path: String,
 }
-/*let sleep_ms_on_net_error = 0; //2 * 1000;
-let sleep_ms_on_block = 0; //25 * 6 * 1000;
-let steam_seller_ratio = 1. - 0.13;*/
 
 impl ProxyDriver {
-    pub fn ban_site(&mut self) {
-        if self.now_working_direct {
-            //let selfmoment_ban_site = std::time::SystemTime::now()..duration_since(earlier)
+    pub fn ban_site(&mut self, proxy: &str) {
+        if !proxy.is_empty() {
+            let (_proxy_k, (_work, ban, _load)) = self.proxies.get_key_value_mut(proxy).unwrap();
+            *ban += 1;
         };
     }
     pub fn ban_work(&mut self, proxy: &str) {
@@ -190,8 +190,14 @@ impl ProxyDriver {
         }
     }*/
     pub fn new() -> Self {
+        let sleep_ms_on_net_error = 0; //2 * 1000;
+        let sleep_ms_on_block = 25 * 6 * 1000;
+        let steam_seller_ratio = 1. - 0.13;
         let mut self_ = Self {
             db_path: r#"C:\Git\Rust\proxy\free_proxy_pool\proxies.db"#.into(),
+            sleep_ms_on_net_error,
+            sleep_ms_on_block,
+            steam_seller_ratio,
             ..Self::default()
         };
         self_.load_proxies();
@@ -218,7 +224,7 @@ impl ProxyDriver {
 
         for row in rows {
             let (ip, port, proxy_type) = row.unwrap();
-            let proxy_type = proxy_scheme(&proxy_type, true);
+            let proxy_type = proxy_scheme(&proxy_type, false);
             let proxy_url = format!("{}://{}:{}", proxy_type, ip, port);
             self.proxies.insert(proxy_url, (0, 0, 0));
         }
@@ -247,11 +253,11 @@ pub async fn get_http_body_0(
     loop {
         //let url = "https://httpbin.org/get";
 
-        let mut client_builder = reqwest::Client::builder();
+        let mut client_builder = reqwest::Client::builder().danger_accept_invalid_certs(true);
         let proxy = proxy_drv.write().unwrap().next();
         let no_proxy = proxy.is_empty();
         if !no_proxy {
-            println!("use proxy {proxy} ...");
+            //println!("use proxy {proxy} ...");
             client_builder = client_builder.proxy(match reqwest::Proxy::all(&proxy) {
                 Ok(p) => p,
                 Err(e) => {
@@ -274,7 +280,7 @@ pub async fn get_http_body_0(
             Ok(r) => r,
             Err(e) => {
                 proxy_drv.write().unwrap().ban_work(&proxy);
-                println!("Get request: {e:?} {}", &proxy);
+                println!("Get request: {} {e:?}", &proxy);
                 //error(format!("Get request: {e:?} {}", &proxy))
                 continue;
             }
@@ -284,12 +290,28 @@ pub async fn get_http_body_0(
             Ok(b) => b,
             Err(e) => {
                 proxy_drv.write().unwrap().ban_work(&proxy);
-                println!("Bytes request: {e:?} {}", &proxy);
+                println!("Bytes request: {} {e:?}", &proxy);
                 continue;
             }
         };
 
-        body = body_bite_to_strig(bytes, mode_utf8_check).unwrap();
+        body = match body_bite_to_strig(bytes, &mode_utf8_check) {
+            Ok(s) => s,
+            Err(_e) => {
+                proxy_drv.write().unwrap().ban_site(&proxy);
+                println!("body_bite_to_strig: {} ", &proxy);
+                if proxy.is_empty() {
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        proxy_drv.read().unwrap().sleep_ms_on_block,
+                    ))
+                    .await;
+                }
+                continue;
+            }
+        };
+        if !no_proxy {
+            println!("use proxy {proxy} ...");
+        }
         break;
     }
 
@@ -298,7 +320,11 @@ pub async fn get_http_body_0(
     Ok(body)
 }
 
-pub async fn get_http_body_2(url: &str, mode_utf8_check: ModeUTF8Check) -> io::Result<String> {
+pub async fn get_http_body_2(
+    url: &str,
+    mode_utf8_check: ModeUTF8Check,
+    cookie: Option<&str>,
+) -> io::Result<String> {
     // Set a process wide default crypto provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -311,8 +337,8 @@ pub async fn get_http_body_2(url: &str, mode_utf8_check: ModeUTF8Check) -> io::R
     let https = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(tls)
         .https_or_http()
-        .enable_http2()
-        //.enable_all_versions()
+        //.enable_http2()
+        .enable_all_versions()
         .build();
 
     // Build the hyper client from the HTTPS connector.
@@ -336,19 +362,20 @@ pub async fn get_http_body_2(url: &str, mode_utf8_check: ModeUTF8Check) -> io::R
     // the returned headers, collects the whole body and prints it to
     // stdout.
 
-    let req = Request::builder()
+    let mut req = Request::builder()
         .header("User-Agent", user_agent(true))
-        .header("Cookie", "cf_clearance=yQ0tNmV3VFnPVUfg4RHAwMtGTAZM8swDxOhL4evbv_I-1732655412-1.2.1.1-WqAkNuBo7VUUygcetpYswoJTPiE4yWGbDspb49.HCaHd.6fQZjHf94dWOX87zEG0Z6nDALp85hCgmXSSOSeiRik4MZiIDyH5qWg3iaSqlWTrvHG4QU5u1xyzhDkCX3Mw038wF2NSSzp1zip_AhvSd8YKTNrsPL6wO7fdo6lUApiT4PjpOiQi5AHVOJW2XEMoZagZv0nzQtdojkdxvh.z6aMd6AyLji7QM3KftBznDdT7KhNUxfYjQVGG3xaJDtMOpLloh1JuoTOLJEESXNjHT8o880OUQ2q5ngJax8Pf27M9a_0ix9uE9q9SSGGKAH7qX0Lbl.ToBrp3dMR.WFDqa4Y_K7PxYq1cIC4mRt0R.Jx45.JkpsDZcJNcKy9gsdoOe3XhDDgocIzgoBx8UfL2ei7cuaeDGMk9BynEKK7ztvoPpIQ85QpAn084AKGWPdEtVAVa9xMZhcsonB9cp1tw0ECNFHljq8f1Sxgs9S4.PG4")
         .method(Method::GET)
-        .uri(url)
-        .body(Empty::new())
-        .map_err(|e| {
-            error(format!(
-                "Request builder: {e:?}, url:{url}, url len:{}, url parse: {:?}",
-                url.len(),
-                url::Url::parse(url)
-            ))
-        })?;
+        .uri(url);
+    if let Some(c) = cookie {
+        req = req.header("Cookie", c);
+    }
+    let req = req.body(Empty::new()).map_err(|e| {
+        error(format!(
+            "Request builder: {e:?}, url:{url}, url len:{}, url parse: {:?}",
+            url.len(),
+            url::Url::parse(url)
+        ))
+    })?;
     //é
 
     let fut = async move {
@@ -369,14 +396,14 @@ pub async fn get_http_body_2(url: &str, mode_utf8_check: ModeUTF8Check) -> io::R
 
         //println!("Body:\n{}", String::from_utf8_lossy(&body));
 
-        let ret = body_bite_to_strig(body, mode_utf8_check).unwrap();
+        let ret = body_bite_to_strig(body, &mode_utf8_check).unwrap();
         Ok(ret)
     };
 
     fut.await
 }
 
-pub fn body_bite_to_strig(body: Bytes, mode_utf8_check: ModeUTF8Check) -> io::Result<String> {
+pub fn body_bite_to_strig(body: Bytes, mode_utf8_check: &ModeUTF8Check) -> io::Result<String> {
     let ret = match mode_utf8_check {
         // вернет без проверки
         ModeUTF8Check::Uncheck => unsafe { String::from_utf8_unchecked(body.to_vec()) },
