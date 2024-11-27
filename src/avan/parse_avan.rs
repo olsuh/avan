@@ -71,7 +71,7 @@ pub struct SellItems {
     item_stickers: Vec<()>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Default, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Default,  Debug)]
 #[serde(default)]
 struct SellDay {
     data: String,
@@ -82,15 +82,59 @@ struct SellDay {
 
 pub async fn parse_avan() {
     let app_id = "252490";
-    let cookie = "cf_clearance=yQ0tNmV3VFnPVUfg4RHAwMtGTAZM8swDxOhL4evbv_I-1732655412-1.2.1.1-WqAkNuBo7VUUygcetpYswoJTPiE4yWGbDspb49.HCaHd.6fQZjHf94dWOX87zEG0Z6nDALp85hCgmXSSOSeiRik4MZiIDyH5qWg3iaSqlWTrvHG4QU5u1xyzhDkCX3Mw038wF2NSSzp1zip_AhvSd8YKTNrsPL6wO7fdo6lUApiT4PjpOiQi5AHVOJW2XEMoZagZv0nzQtdojkdxvh.z6aMd6AyLji7QM3KftBznDdT7KhNUxfYjQVGG3xaJDtMOpLloh1JuoTOLJEESXNjHT8o880OUQ2q5ngJax8Pf27M9a_0ix9uE9q9SSGGKAH7qX0Lbl.ToBrp3dMR.WFDqa4Y_K7PxYq1cIC4mRt0R.Jx45.JkpsDZcJNcKy9gsdoOe3XhDDgocIzgoBx8UfL2ei7cuaeDGMk9BynEKK7ztvoPpIQ85QpAn084AKGWPdEtVAVa9xMZhcsonB9cp1tw0ECNFHljq8f1Sxgs9S4.PG4";
+    let headers = 
+r#"Accept:
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+//Accept-Encoding:
+gzip, deflate, br
+//Accept-Language:
+ru,en;q=0.9
+//Cache-Control:
+max-age=0
+Cookie:
+__cflb=02DiuGa87D2dctS5ktMzN4rkcLKtFiGd41cWkN6hQT5Yp; cf_clearance=yQ0tNmV3VFnPVUfg4RHAwMtGTAZM8swDxOhL4evbv_I-1732655412-1.2.1.1-WqAkNuBo7VUUygcetpYswoJTPiE4yWGbDspb49.HCaHd.6fQZjHf94dWOX87zEG0Z6nDALp85hCgmXSSOSeiRik4MZiIDyH5qWg3iaSqlWTrvHG4QU5u1xyzhDkCX3Mw038wF2NSSzp1zip_AhvSd8YKTNrsPL6wO7fdo6lUApiT4PjpOiQi5AHVOJW2XEMoZagZv0nzQtdojkdxvh.z6aMd6AyLji7QM3KftBznDdT7KhNUxfYjQVGG3xaJDtMOpLloh1JuoTOLJEESXNjHT8o880OUQ2q5ngJax8Pf27M9a_0ix9uE9q9SSGGKAH7qX0Lbl.ToBrp3dMR.WFDqa4Y_K7PxYq1cIC4mRt0R.Jx45.JkpsDZcJNcKy9gsdoOe3XhDDgocIzgoBx8UfL2ei7cuaeDGMk9BynEKK7ztvoPpIQ85QpAn084AKGWPdEtVAVa9xMZhcsonB9cp1tw0ECNFHljq8f1Sxgs9S4.PG4
+//If-None-Match:
+W/"834a-3t2j7CbJwru+DK1IVYnIMJVZzwc"
+//Sec-Ch-Ua:
+"Chromium";v="118", "YaBrowser";v="23", "Not=A?Brand";v="99"
+//Sec-Ch-Ua-Arch:
+"x86"
+//Sec-Ch-Ua-Bitness:
+"64"
+//Sec-Ch-Ua-Full-Version:
+"23.11.0.2470"
+//Sec-Ch-Ua-Full-Version-List:
+"Chromium";v="118.0.5993.144", "YaBrowser";v="23.11.0.2470", "Not=A?Brand";v="99.0.0.0"
+//Sec-Ch-Ua-Mobile:
+?0
+//Sec-Ch-Ua-Model:
+""
+//Sec-Ch-Ua-Platform:
+"Windows"
+//Sec-Ch-Ua-Platform-Version:
+"10.0.0"
+//Sec-Fetch-Dest:
+document
+//Sec-Fetch-Mode:
+navigate
+//Sec-Fetch-Site:
+cross-site
+//Sec-Fetch-User:
+?1
+//Upgrade-Insecure-Requests:
+1"#;
+//let headers = "";
+    //let cookie = "__cflb=02DiuGa87D2dctS5ktMzN4rkcLKtFiGd41cWkN6hQT5Yp; cf_clearance=yQ0tNmV3VFnPVUfg4RHAwMtGTAZM8swDxOhL4evbv_I-1732655412-1.2.1.1-WqAkNuBo7VUUygcetpYswoJTPiE4yWGbDspb49.HCaHd.6fQZjHf94dWOX87zEG0Z6nDALp85hCgmXSSOSeiRik4MZiIDyH5qWg3iaSqlWTrvHG4QU5u1xyzhDkCX3Mw038wF2NSSzp1zip_AhvSd8YKTNrsPL6wO7fdo6lUApiT4PjpOiQi5AHVOJW2XEMoZagZv0nzQtdojkdxvh.z6aMd6AyLji7QM3KftBznDdT7KhNUxfYjQVGG3xaJDtMOpLloh1JuoTOLJEESXNjHT8o880OUQ2q5ngJax8Pf27M9a_0ix9uE9q9SSGGKAH7qX0Lbl.ToBrp3dMR.WFDqa4Y_K7PxYq1cIC4mRt0R.Jx45.JkpsDZcJNcKy9gsdoOe3XhDDgocIzgoBx8UfL2ei7cuaeDGMk9BynEKK7ztvoPpIQ85QpAn084AKGWPdEtVAVa9xMZhcsonB9cp1tw0ECNFHljq8f1Sxgs9S4.PG4";
     let proxy_drv = Arc::new(RwLock::new(ProxyDriver::new()));
+
+    proxy_drv.write().unwrap().control_string = "g_timePriceHistoryEarliest".into();
     let mut page = 1;
     let mut root = Root::default();
     loop {
         let url = format!(
             "https://avan.market/v1/api/users/catalog?app_id={app_id}&currency=1&page={page}"
         );
-        let body = get_http_body(&url, ModeUTF8Check::Uncheck, None, Some(cookie))
+        let body = get_http_body(&url, ModeUTF8Check::Lossy, None, Some(headers))
             .await
             .unwrap();
         dbg!(url);
@@ -180,7 +224,13 @@ async fn parse_steam_item(proxy_drv: ProxyApp, item: &Item) -> SteamItem {
             let substr1 = "line1=";
             let substr2 = "g_timePriceHistoryEarliest";
             let Some(line1) = substr(&body, substr1, substr2) else {
-                eprintln!("{} не нашли line1, длина body {}...", full_name, body.len());
+                let len = 400.min(body.len());
+                eprintln!(
+                    "{} не нашли line1, длина body {} - {}",
+                    full_name,
+                    body.len(),
+                    &body[..len]
+                );
                 proxy_drv.write().unwrap().ban_site("");
                 /*tokio::time::sleep(std::time::Duration::from_millis(
                     proxy_drv.read().unwrap().sleep_ms_on_block,

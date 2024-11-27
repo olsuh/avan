@@ -1,7 +1,7 @@
 // Simple HTTPS GET client based on hyper-rustls
 use bytes::Bytes;
 use hashbrown::HashMap;
-use http::{Method, Request};
+use http::{HeaderMap, Method, Request};
 use http_body_util::{BodyExt, Empty};
 use hyper_rustls::ConfigBuilderExt;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
@@ -27,10 +27,10 @@ pub async fn get_http_body(
     url: &str,
     mode_utf8_check: ModeUTF8Check,
     proxy_drv: Option<ProxyApp>,
-    cookie: Option<&str>,
+    headers: Option<&'static str>,
 ) -> io::Result<String> {
     match proxy_drv {
-        None => get_http_body_2(url, mode_utf8_check, cookie).await,
+        None => get_http_body_2(url, mode_utf8_check, headers).await,
         Some(p_d) => get_http_body_0(url, mode_utf8_check, p_d).await,
     }
 }
@@ -164,6 +164,7 @@ pub struct ProxyDriver {
     pub sleep_ms_on_block: u64,
     pub steam_seller_ratio: f64,
     pub db_path: String,
+    pub control_string: String,
 }
 
 impl ProxyDriver {
@@ -224,9 +225,11 @@ impl ProxyDriver {
 
         for row in rows {
             let (ip, port, proxy_type) = row.unwrap();
-            let proxy_type = proxy_scheme(&proxy_type, false);
-            let proxy_url = format!("{}://{}:{}", proxy_type, ip, port);
-            self.proxies.insert(proxy_url, (0, 0, 0));
+            let proxy_schemes = proxy_schemes(&proxy_type);
+            for proxy_scheme in proxy_schemes {
+                let proxy_url = format!("{}://{}:{}", proxy_scheme, ip, port);
+                self.proxies.insert(proxy_url, (0, 0, 0));
+            }
         }
     }
 
@@ -257,7 +260,7 @@ pub async fn get_http_body_0(
         let proxy = proxy_drv.write().unwrap().next();
         let no_proxy = proxy.is_empty();
         if !no_proxy {
-            //println!("use proxy {proxy} ...");
+            println!("use proxy {proxy} ...");
             client_builder = client_builder.proxy(match reqwest::Proxy::all(&proxy) {
                 Ok(p) => p,
                 Err(e) => {
@@ -296,15 +299,27 @@ pub async fn get_http_body_0(
         };
 
         body = match body_bite_to_strig(bytes, &mode_utf8_check) {
-            Ok(s) => s,
+            Ok(s) => {
+                let cs = &proxy_drv.read().unwrap().control_string;
+                if !cs.is_empty() && !s.contains(cs) {
+                    proxy_drv.write().unwrap().ban_work(&proxy);
+                    continue;
+                }
+                s
+            }
             Err(_e) => {
                 proxy_drv.write().unwrap().ban_site(&proxy);
-                println!("body_bite_to_strig: {} ", &proxy);
+                println!("body_bite_to_strig: {} error", &proxy);
                 if proxy.is_empty() {
+                    println!(
+                        "поспим: {} ...",
+                        proxy_drv.read().unwrap().sleep_ms_on_block
+                    );
                     tokio::time::sleep(std::time::Duration::from_millis(
                         proxy_drv.read().unwrap().sleep_ms_on_block,
                     ))
                     .await;
+                    println!("поспали.");
                 }
                 continue;
             }
@@ -320,10 +335,25 @@ pub async fn get_http_body_0(
     Ok(body)
 }
 
+pub fn headers_from_str(headers: &'static str) -> HeaderMap {
+    let mut ret_head = HeaderMap::new();
+    if headers.is_empty() {return ret_head;}
+    let headers_vec = headers.split("\n").collect::<Vec<_>>();
+    for i in (0..headers_vec.len()).step_by(2) {
+        if headers_vec[i].starts_with("//") {
+            continue;
+        }
+        let k = &headers_vec[i][..headers_vec[i].len()-1];
+        let v = headers_vec[i+1].parse().unwrap();
+        let _x = ret_head.insert(k, v);
+    }
+    ret_head
+}
+
 pub async fn get_http_body_2(
     url: &str,
     mode_utf8_check: ModeUTF8Check,
-    cookie: Option<&str>,
+    headers: Option<&'static str>,
 ) -> io::Result<String> {
     // Set a process wide default crypto provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -366,8 +396,13 @@ pub async fn get_http_body_2(
         .header("User-Agent", user_agent(true))
         .method(Method::GET)
         .uri(url);
-    if let Some(c) = cookie {
-        req = req.header("Cookie", c);
+    if let Some(c) = headers {
+        //req = req.header("Cookie", c);
+        let headers = req.headers_mut().unwrap();
+        let new_headers = headers_from_str(c);
+        headers.extend(new_headers);
+        dbg!(&headers);
+
     }
     let req = req.body(Empty::new()).map_err(|e| {
         error(format!(
@@ -426,4 +461,23 @@ pub fn proxy_scheme(proxy_types: &str, force_https: bool) -> String {
         proxy_scheme = "https"
     };
     proxy_scheme.to_string()
+}
+
+pub fn proxy_schemes(proxy_types: &str) -> Vec<String> {
+    let proxy_types = proxy_types.to_lowercase();
+    let proxy_scheme = proxy_types.split(", ").collect::<Vec<_>>();
+    let mut proxy_schemes = vec![];
+    for p in proxy_scheme {
+        let x = match p {
+            "http" => Some(p.to_string()),
+            "https" => Some(p.to_string()),
+            "socks5" => Some(p.to_string()),
+            "socks4" => Some("socks5".to_string()),
+            _ => None,
+        };
+        if let Some(x) = x {
+            proxy_schemes.push(x);
+        };
+    }
+    proxy_schemes
 }
